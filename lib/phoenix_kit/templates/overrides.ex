@@ -8,21 +8,37 @@ defmodule PhoenixKit.Templates.Overrides do
 
   ## Layout
 
-      <root>/<name>/<part>.<locale>.<ext>
-      <root>/<name>/<part>.<ext>
+  **`name` is a DIRECTORY, never a filename.** Files inside it are named for the
+  part they supply, optionally carrying a locale:
+
+      <root>/<name>/<part>.<locale>.<ext>       text.en-GB.txt
+      <root>/<name>/<part>.<ext>                text.txt
+
+  Worked:
+
+      priv/phoenix_kit_templates/     <- <root>
+      └── new_login_alert/            <- <name>
+          ├── subject.txt
+          ├── subject.de.txt
+          └── text.txt
 
   `subject` and `text` are `.txt`; `html` is `.html`. A root is typically
   `Application.app_dir(:my_app, "priv/phoenix_kit_templates")`, but this module
   takes roots as an argument and reads no configuration of its own — it must not
   know which application is using it.
 
-  Lookup runs most- to least-specific, and stops at the first file that exists:
+  Lookup runs most- to least-specific and stops at the first file that exists:
 
       text.en-GB.txt   →   text.en.txt   →   text.txt
 
   so a host that only cares about one language writes `text.txt` and is done,
   while one that translates its overrides gets dialect precision. Roots are
   tried in order, so an earlier root shadows a later one.
+
+  Each part is looked up separately: in the tree above, a German reader gets
+  `subject.de.txt` and `text.txt`, and an Italian reader gets `subject.txt` and
+  `text.txt`. A part with no file at all resolves to `nil`, and the caller falls
+  back to its own default.
 
   ## Runtime, not compile time
 

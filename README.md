@@ -44,14 +44,46 @@ translated `subject` and `text` rather than having to restate them.
 
 ## Override layout
 
+**The template's name is a directory, not a filename.** Files inside it are
+named for the part they supply, optionally carrying a locale:
+
 ```
-<root>/<name>/<part>.<locale>.<ext>
-<root>/<name>/<part>.<ext>
+priv/phoenix_kit_templates/     <- a root, passed as :paths
+└── new_login_alert/            <- the template NAME (a directory)
+    ├── subject.txt             <- <part>.<ext>
+    ├── subject.de.txt          <- <part>.<locale>.<ext>
+    ├── text.txt
+    ├── text.de.txt
+    └── html.html
 ```
 
-`subject` and `text` are `.txt`; `html` is `.html`. Overrides live in the host
-application, which compiles separately from this package — so they are read at
-runtime and cached in `:persistent_term`, the absence of a file included.
+Parts are named for what they are rather than for email, because every channel
+reads the same three:
+
+| part | file | read by |
+|---|---|---|
+| `subject` | `subject[.locale].txt` | email subject line, push title |
+| `text` | `text[.locale].txt` | email body, push body, Telegram, SMS, in-app inbox |
+| `html` | `html[.locale].html` | email only — optional |
+
+Given that tree, a German recipient resolves to `subject.de.txt` + `text.de.txt`;
+an Italian one falls through to `subject.txt` + `text.txt`. A host that wrote
+only `text.txt` still gets the package's translated subject in every language —
+parts are looked up independently.
+
+A directory rather than flat files because one template is up to three parts
+times however many locales a host translates. Flat, they would interleave with
+every other template's files and you would be reading filename prefixes to tell
+them apart; grouped, a template is one folder to copy, diff or delete.
+
+`html` is genuinely optional, not nominally so: a text-only template is the
+normal case. Core's own auth emails ship without one — short transactional
+messages where plain text wins on the merits (no image blocking, no dark-mode
+breakage, no client-specific CSS, better deliverability).
+
+Overrides live in the host application, which compiles separately from this
+package — so they are read at runtime and cached in `:persistent_term`, the
+absence of a file included.
 
 ### The name is the slug
 
@@ -66,13 +98,6 @@ view. With no editor and no routes, a second identifier addresses nothing. A
 human-readable label, if one is ever wanted, is a Gettext call in the sending
 package rather than a stored column — the same place its subject and body
 already live.
-
-## Parts
-
-`subject`, `text` and `html`, named for what they are rather than for email:
-push uses subject-as-title plus text, Telegram and SMS use text alone, the inbox
-uses text. `html` is genuinely optional — a text-only template is the normal
-case, not a stub.
 
 ## Placeholders
 

@@ -23,15 +23,51 @@ defmodule PhoenixKit.Templates do
         paths: [Application.app_dir(:my_app, "priv/phoenix_kit_templates")]
       )
 
-  Resolution, per part and independently:
+  ## On disk
 
-      1. host override · recipient locale     (text.uk.txt)
-      2. host override · base language        (text.en.txt from "en-GB")
-      3. host override · locale-less          (text.txt)
-      4. the default the caller passed in     (already localized via Gettext)
+  **A template's name is a DIRECTORY, never a filename.** The files inside it
+  are named for the *part* they supply, optionally carrying a locale:
 
-  Independence matters: a host that overrides only `html` keeps the package's
-  translated `subject` and `text` rather than having to restate them.
+      priv/phoenix_kit_templates/     <- a root, passed as :paths
+      └── new_login_alert/            <- the template NAME (a directory)
+          ├── subject.txt             <- <part>.<ext>
+          ├── subject.de.txt          <- <part>.<locale>.<ext>
+          ├── text.txt
+          ├── text.de.txt
+          └── html.html
+
+  | part | file | used by |
+  |---|---|---|
+  | `subject` | `subject[.locale].txt` | email subject, push title |
+  | `text` | `text[.locale].txt` | every channel |
+  | `html` | `html[.locale].html` | email only, optional |
+
+  A directory rather than flat files because one template is up to three parts
+  times however many locales a host translates — flat, they would interleave
+  with every other template's files and you would be reading filename prefixes
+  to tell them apart. Grouped, a template is one folder to copy, diff or delete.
+
+  This is also why `name` is the only identifier and is validated as
+  `[a-z0-9][a-z0-9_\-]*`: it is a path segment, so it must be filesystem-safe.
+  It is slug-shaped by necessity, which is what makes a separate slug field a
+  second spelling of a constraint the path already enforces.
+
+  ## Resolution
+
+  Per part, independently, stopping at the first hit. For part `subject` and a
+  recipient locale of `"de-AT"`:
+
+      1. subject.de-AT.txt      host override · exact dialect
+      2. subject.de.txt         host override · base language
+      3. subject.txt            host override · locale-less
+      4. defaults[:subject]     the caller's Gettext default
+
+  Roots are tried in order, so an earlier root shadows a later one.
+
+  Independence matters. Given the tree above and a German recipient, a host that
+  wrote only `text.txt` still gets the package's translated German subject; the
+  override applies to the body alone. And `subject.de.txt` wins for a German
+  reader while an Italian one falls through to `subject.txt`.
 
   ## Why the default is not a file
 
