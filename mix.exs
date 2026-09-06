@@ -2,7 +2,7 @@ defmodule PhoenixKitTemplates.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/BeamLabEU/phoenix_kit_templates"
-  @version "0.1.0"
+  @version "0.1.1"
 
   def project do
     [
@@ -33,7 +33,11 @@ defmodule PhoenixKitTemplates.MixProject do
 
   defp docs do
     [
-      extras: ["README.md": [title: "Overview"]],
+      extras: [
+        "README.md": [title: "Overview"],
+        "CHANGELOG.md": [title: "Changelog"],
+        LICENSE: [title: "License"]
+      ],
       main: "readme",
       source_url: @source_url,
       source_ref: @version,
@@ -47,7 +51,7 @@ defmodule PhoenixKitTemplates.MixProject do
       maintainers: ["BeamLab EU"],
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
-      files: ~w(lib mix.exs README.md LICENSE)
+      files: ~w(lib mix.exs README.md LICENSE CHANGELOG.md)
     ]
   end
 end
