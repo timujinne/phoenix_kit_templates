@@ -43,9 +43,11 @@ defmodule PhoenixKitTemplates.MixProject do
 
   defp package do
     [
+      name: "phoenix_kit_templates",
+      maintainers: ["BeamLab EU"],
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
-      files: ~w(lib mix.exs README.md)
+      files: ~w(lib mix.exs README.md LICENSE)
     ]
   end
 end
