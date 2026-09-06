@@ -1,0 +1,123 @@
+defmodule PhoenixKit.Templates.OverridesTest do
+  # tmp_dir gives each test its own root, so the persistent_term cache (keyed on
+  # the root) cannot leak between them and the suite stays async.
+  use ExUnit.Case, async: true
+
+  alias PhoenixKit.Templates.Overrides
+
+  @moduletag :tmp_dir
+
+  defp write(root, name, file, content) do
+    dir = Path.join(root, name)
+    File.mkdir_p!(dir)
+    File.write!(Path.join(dir, file), content)
+  end
+
+  describe "read/4 locale precedence" do
+    test "prefers the exact dialect over the base language", %{tmp_dir: root} do
+      write(root, "alert", "text.en-GB.txt", "dialect")
+      write(root, "alert", "text.en.txt", "base")
+      write(root, "alert", "text.txt", "plain")
+
+      assert Overrides.read([root], "alert", :text, "en-GB") == "dialect"
+    end
+
+    test "falls back from a dialect to the base language", %{tmp_dir: root} do
+      write(root, "alert", "text.en.txt", "base")
+      write(root, "alert", "text.txt", "plain")
+
+      assert Overrides.read([root], "alert", :text, "en-GB") == "base"
+    end
+
+    test "falls back to the locale-less file", %{tmp_dir: root} do
+      # The single-language host: writes one file, gets it for every recipient.
+      write(root, "alert", "text.txt", "plain")
+
+      assert Overrides.read([root], "alert", :text, "en-GB") == "plain"
+      assert Overrides.read([root], "alert", :text, "uk") == "plain"
+      assert Overrides.read([root], "alert", :text, nil) == "plain"
+    end
+
+    test "a nil locale skips the locale-specific candidates", %{tmp_dir: root} do
+      write(root, "alert", "text.en.txt", "base")
+
+      assert Overrides.read([root], "alert", :text, nil) == nil
+    end
+  end
+
+  describe "read/4 parts and roots" do
+    test "html reads a .html file, subject and text read .txt", %{tmp_dir: root} do
+      write(root, "alert", "subject.txt", "s")
+      write(root, "alert", "text.txt", "t")
+      write(root, "alert", "html.html", "<p>h</p>")
+
+      assert Overrides.read([root], "alert", :subject, nil) == "s"
+      assert Overrides.read([root], "alert", :text, nil) == "t"
+      assert Overrides.read([root], "alert", :html, nil) == "<p>h</p>"
+    end
+
+    test "an earlier root shadows a later one", %{tmp_dir: root} do
+      first = Path.join(root, "first")
+      second = Path.join(root, "second")
+      write(first, "alert", "text.txt", "winner")
+      write(second, "alert", "text.txt", "loser")
+
+      assert Overrides.read([first, second], "alert", :text, nil) == "winner"
+    end
+
+    test "returns nil when no root has the file", %{tmp_dir: root} do
+      assert Overrides.read([root], "alert", :text, nil) == nil
+      assert Overrides.read([], "alert", :text, nil) == nil
+    end
+  end
+
+  describe "read/4 path safety" do
+    test "refuses a name that would escape the root", %{tmp_dir: root} do
+      # This module turns a caller-supplied name into a filesystem read; that is
+      # not a boundary to leave to the caller's good behaviour.
+      File.write!(Path.join(root, "secret.txt"), "top secret")
+
+      for name <- ["../secret", "..", "a/../../b", "/etc/passwd", "Alert", ""] do
+        assert Overrides.read([root], name, :text, nil) == nil,
+               "expected #{inspect(name)} to resolve to no override"
+      end
+    end
+
+    test "an unparseable locale contributes no candidate of its own", %{tmp_dir: root} do
+      write(root, "alert", "text.txt", "plain")
+
+      # Falls through to the locale-less file rather than building a path out of
+      # the junk it was handed.
+      assert Overrides.read([root], "alert", :text, "../../etc") == "plain"
+    end
+
+    test "an unknown part resolves to nothing", %{tmp_dir: root} do
+      write(root, "alert", "text.txt", "plain")
+
+      assert Overrides.read([root], "alert", :footer, nil) == nil
+    end
+  end
+
+  describe "caching" do
+    test "a lookup is made once and then served from the cache", %{tmp_dir: root} do
+      write(root, "alert", "text.txt", "original")
+      assert Overrides.read([root], "alert", :text, nil) == "original"
+
+      File.write!(Path.join([root, "alert", "text.txt"]), "changed")
+      assert Overrides.read([root], "alert", :text, nil) == "original"
+
+      Overrides.reset_cache([root])
+      assert Overrides.read([root], "alert", :text, nil) == "changed"
+    end
+
+    test "a missing override is cached too, not re-stat'd on every send", %{tmp_dir: root} do
+      assert Overrides.read([root], "alert", :text, nil) == nil
+
+      write(root, "alert", "text.txt", "appeared")
+      assert Overrides.read([root], "alert", :text, nil) == nil
+
+      Overrides.reset_cache([root])
+      assert Overrides.read([root], "alert", :text, nil) == "appeared"
+    end
+  end
+end
