@@ -53,6 +53,20 @@ translated `subject` and `text` rather than having to restate them.
 application, which compiles separately from this package — so they are read at
 runtime and cached in `:persistent_term`, the absence of a file included.
 
+### The name is the slug
+
+There is no separate slug, and no `display_name`. `name` is validated as
+`[a-z0-9][a-z0-9_\-]*` — slug-shaped by construction, because it is a directory
+name on disk and has to be safe to join onto a path.
+
+The database schema this replaces carried both, for a reason that no longer
+exists: `name` identified the template while `slug` addressed the admin
+editor's routes (`…/templates/:slug`), and `display_name` labelled its list
+view. With no editor and no routes, a second identifier addresses nothing. A
+human-readable label, if one is ever wanted, is a Gettext call in the sending
+package rather than a stored column — the same place its subject and body
+already live.
+
 ## Parts
 
 `subject`, `text` and `html`, named for what they are rather than for email:
