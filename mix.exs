@@ -2,7 +2,7 @@ defmodule PhoenixKitTemplates.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/BeamLabEU/phoenix_kit_templates"
-  @version "0.1.1"
+  @version "0.1.2"
 
   def project do
     [
@@ -40,7 +40,7 @@ defmodule PhoenixKitTemplates.MixProject do
       ],
       main: "readme",
       source_url: @source_url,
-      source_ref: @version,
+      source_ref: "v#{@version}",
       formatters: ["html"]
     ]
   end

@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.1.2 - 2026-09-16
+
+### Fixed
+
+- **Invalid input no longer creates cache entries.** `Overrides.read/4` checks
+  the name, part and locale before it touches `:persistent_term`. A malformed
+  locale now shares the `nil` locale's cache entry, and an invalid name or
+  unknown part returns `nil` without caching anything. Before, each of these
+  added a permanent key, and every new key copies the whole table.
+- `Overrides.read/4` now raises on a bare string root instead of quietly finding
+  no overrides. The old behaviour also cached a key that made a later
+  `reset_cache/1` crash. `render/4` treats `paths: nil` as `[]`.
+- The hexdocs source links now point at the `v<version>` tag instead of a ref
+  that doesn't exist.
+- The README and moduledoc example called `gettext("Hi %{email}, …")` without
+  bindings, which raises. It now uses a `{{user_email}}` placeholder.
+
+### Changed
+
+- Locales can have up to three subtags and lose one at a time on fallback:
+  `zh-Hant-TW` → `zh-Hant` → `zh` → locale-less. Before, any locale with more
+  than one subtag skipped straight to the locale-less file.
+- `render/4` and `missing_variables/4` now share one resolution function, so the
+  check always sees the same content the render sends.
+
 ## 0.1.1 - 2026-09-06
 
 ### Documentation

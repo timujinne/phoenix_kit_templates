@@ -17,8 +17,8 @@ defmodule PhoenixKit.Templates do
 
       PhoenixKit.Templates.render(
         "new_login_alert",
-        %{subject: gettext("New login to your account"), text: gettext("Hi %{email}, …")},
-        %{"ip_address" => ip},
+        %{subject: gettext("New login to your account"), text: gettext("Hi {{user_email}}, …")},
+        %{"user_email" => email, "ip_address" => ip},
         locale: "uk",
         paths: [Application.app_dir(:my_app, "priv/phoenix_kit_templates")]
       )
@@ -109,12 +109,8 @@ defmodule PhoenixKit.Templates do
   """
   @spec render(String.t(), defaults(), Substitution.variables(), keyword()) :: rendered()
   def render(name, defaults, variables \\ %{}, opts \\ []) when is_binary(name) do
-    locale = Keyword.get(opts, :locale)
-    paths = Keyword.get(opts, :paths, [])
-
     Map.new(Overrides.parts(), fn part ->
-      content = Overrides.read(paths, name, part, locale) || Map.get(defaults, part)
-      {part, Substitution.substitute(content, variables)}
+      {part, name |> resolve(part, defaults, opts) |> Substitution.substitute(variables)}
     end)
   end
 
@@ -129,17 +125,17 @@ defmodule PhoenixKit.Templates do
   @spec missing_variables(String.t(), defaults(), Substitution.variables(), keyword()) ::
           %{optional(Overrides.part()) => [String.t()]}
   def missing_variables(name, defaults, variables \\ %{}, opts \\ []) when is_binary(name) do
-    locale = Keyword.get(opts, :locale)
-    paths = Keyword.get(opts, :paths, [])
-
-    Overrides.parts()
-    |> Enum.reduce(%{}, fn part, acc ->
-      content = Overrides.read(paths, name, part, locale) || Map.get(defaults, part)
-
-      case Substitution.missing(content, variables) do
+    Enum.reduce(Overrides.parts(), %{}, fn part, acc ->
+      case name |> resolve(part, defaults, opts) |> Substitution.missing(variables) do
         [] -> acc
         names -> Map.put(acc, part, names)
       end
     end)
+  end
+
+  # The one resolution both functions share, so the check can never inspect
+  # different content from what the render would send.
+  defp resolve(name, part, defaults, opts) do
+    Overrides.read(opts[:paths] || [], name, part, opts[:locale]) || Map.get(defaults, part)
   end
 end

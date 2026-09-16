@@ -38,6 +38,14 @@ defmodule PhoenixKit.Templates.OverridesTest do
       assert Overrides.read([root], "alert", :text, nil) == "plain"
     end
 
+    test "drops one subtag at a time for a multi-subtag locale", %{tmp_dir: root} do
+      write(root, "alert", "text.zh-Hant.txt", "script")
+      write(root, "alert", "text.zh.txt", "base")
+
+      assert Overrides.read([root], "alert", :text, "zh-Hant-TW") == "script"
+      assert Overrides.read([root], "alert", :text, "zh-Hans-CN") == "base"
+    end
+
     test "a nil locale skips the locale-specific candidates", %{tmp_dir: root} do
       write(root, "alert", "text.en.txt", "base")
 
@@ -91,6 +99,10 @@ defmodule PhoenixKit.Templates.OverridesTest do
       assert Overrides.read([root], "alert", :text, "../../etc") == "plain"
     end
 
+    test "a bare string root is a caller bug, not an empty lookup", %{tmp_dir: root} do
+      assert_raise FunctionClauseError, fn -> Overrides.read(root, "alert", :text, nil) end
+    end
+
     test "an unknown part resolves to nothing", %{tmp_dir: root} do
       write(root, "alert", "text.txt", "plain")
 
@@ -119,5 +131,23 @@ defmodule PhoenixKit.Templates.OverridesTest do
       Overrides.reset_cache([root])
       assert Overrides.read([root], "alert", :text, nil) == "appeared"
     end
+
+    test "junk input cannot mint cache entries of its own", %{tmp_dir: root} do
+      # Every key is a permanent :persistent_term entry, and each new one copies
+      # the whole table — so garbage must share nil's entry or make none at all.
+      Overrides.read([root], "alert", :text, nil)
+      before = cache_keys(root)
+
+      Overrides.read([root], "alert", :text, "not a locale")
+      Overrides.read([root], "alert", :text, "../../etc")
+      Overrides.read([root], "../alert", :text, nil)
+      Overrides.read([root], "alert", :footer, nil)
+
+      assert cache_keys(root) == before
+    end
+  end
+
+  defp cache_keys(root) do
+    for {{Overrides, roots, _, _, _} = key, _} <- :persistent_term.get(), root in roots, do: key
   end
 end

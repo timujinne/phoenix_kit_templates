@@ -61,7 +61,7 @@ defmodule PhoenixKit.Templates.Overrides do
   @parts %{subject: "txt", text: "txt", html: "html"}
 
   @name_pattern ~r/\A[a-z0-9][a-z0-9_\-]*\z/
-  @locale_pattern ~r/\A[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?\z/
+  @locale_pattern ~r/\A[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8}){0,3}\z/
 
   @typedoc "Which part of a template to look for."
   @type part :: :subject | :text | :html
@@ -73,20 +73,15 @@ defmodule PhoenixKit.Templates.Overrides do
   @doc """
   The contents of the best-matching override file, or `nil` when there is none.
 
-  `locale` may be `nil`, which skips straight to the locale-less candidate.
+  `locale` may be `nil`, which skips straight to the locale-less candidate, as
+  does a locale that is not a well-formed tag. `roots` must be a list — a bare
+  string is a caller bug, and silently finding no overrides in it would hide
+  that.
   """
   @spec read([Path.t()], String.t(), part(), String.t() | nil) :: String.t() | nil
-  def read(roots, name, part, locale) do
-    key = {__MODULE__, roots, name, part, locale}
-
-    case :persistent_term.get(key, :miss) do
-      :miss ->
-        content = lookup(roots, name, part, locale)
-        :persistent_term.put(key, content)
-        content
-
-      cached ->
-        cached
+  def read(roots, name, part, locale) when is_list(roots) do
+    if valid_request?(name, part) do
+      cached_lookup(roots, name, part, normalize_locale(locale))
     end
   end
 
@@ -111,18 +106,41 @@ defmodule PhoenixKit.Templates.Overrides do
     :ok
   end
 
-  defp lookup(roots, name, part, locale) when is_list(roots) do
-    with true <- Map.has_key?(@parts, part),
-         true <- Regex.match?(@name_pattern, to_string(name)) do
-      roots
-      |> Enum.flat_map(&candidates(&1, name, part, locale))
-      |> Enum.find_value(&read_file/1)
-    else
-      false -> nil
+  # Validated before the cache is consulted, not after: every distinct key is a
+  # permanent `:persistent_term` entry, and each new one copies the whole table.
+  # A junk name or locale must not be able to mint entries of its own.
+  defp valid_request?(name, part) do
+    is_binary(name) and Map.has_key?(@parts, part) and Regex.match?(@name_pattern, name)
+  end
+
+  # An unparseable locale contributes no candidates of its own rather than being
+  # interpolated into a path, so it resolves exactly as `nil` does — and shares
+  # `nil`'s cache entry.
+  defp normalize_locale(locale) when is_binary(locale) do
+    if Regex.match?(@locale_pattern, locale), do: locale
+  end
+
+  defp normalize_locale(_locale), do: nil
+
+  defp cached_lookup(roots, name, part, locale) do
+    key = {__MODULE__, roots, name, part, locale}
+
+    case :persistent_term.get(key, :miss) do
+      :miss ->
+        content = lookup(roots, name, part, locale)
+        :persistent_term.put(key, content)
+        content
+
+      cached ->
+        cached
     end
   end
 
-  defp lookup(_roots, _name, _part, _locale), do: nil
+  defp lookup(roots, name, part, locale) do
+    roots
+    |> Enum.flat_map(&candidates(&1, name, part, locale))
+    |> Enum.find_value(&read_file/1)
+  end
 
   defp candidates(root, name, part, locale) do
     extension = Map.fetch!(@parts, part)
@@ -135,21 +153,17 @@ defmodule PhoenixKit.Templates.Overrides do
     end)
   end
 
-  # "en-GB" is tried, then "en", then the locale-less file. An unparseable
-  # locale contributes no candidates of its own rather than being interpolated
-  # into a path.
-  defp locale_suffixes(locale) when is_binary(locale) do
-    if Regex.match?(@locale_pattern, locale) do
-      case String.split(locale, "-") do
-        [base] -> [base, nil]
-        [base | _dialect] -> [locale, base, nil]
-      end
-    else
-      [nil]
-    end
-  end
+  # Most- to least-specific, dropping one subtag at a time: "zh-Hant-TW" tries
+  # "zh-Hant-TW", "zh-Hant", "zh", then the locale-less file.
+  defp locale_suffixes(nil), do: [nil]
 
-  defp locale_suffixes(_locale), do: [nil]
+  defp locale_suffixes(locale) do
+    subtags = String.split(locale, "-")
+
+    length(subtags)..1//-1
+    |> Enum.map(&(subtags |> Enum.take(&1) |> Enum.join("-")))
+    |> Kernel.++([nil])
+  end
 
   defp read_file(path) do
     case File.read(path) do

@@ -7,8 +7,8 @@ customizable copy is built the same way everywhere instead of once per channel.
 ```elixir
 PhoenixKit.Templates.render(
   "new_login_alert",
-  %{subject: gettext("New login to your account"), text: gettext("Hi %{email}, …")},
-  %{"ip_address" => ip},
+  %{subject: gettext("New login to your account"), text: gettext("Hi {{user_email}}, …")},
+  %{"user_email" => email, "ip_address" => ip},
   locale: "uk",
   paths: [Application.app_dir(:my_app, "priv/phoenix_kit_templates")]
 )
