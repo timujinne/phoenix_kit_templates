@@ -102,7 +102,16 @@ already live.
 ## Placeholders
 
 `{{variable}}`, with optional inner whitespace, matching the syntax the
-database-backed email templates used so exported content carries over unchanged.
+database-backed email templates used so exported content carries over
+unchanged — as long as it contains no triple brace. `{{{variable}}}` is new in
+0.2.0: writing it into a database row does nothing useful, because
+`phoenix_kit_emails`/`phoenix_kit_newsletters` substitute with their own,
+older `{{var}}`-only regex, which has no triple-brace rule and renders the
+outer pair as literal text instead (see `PhoenixKit.Templates.Substitution`
+for exactly what that looks like). Exporting a database template that carries
+pre-rendered HTML — `line_items_html`, a wrapped `content` — into this
+package's file layout must translate that placeholder from `{{var}}` to
+`{{{var}}}` at export time; the reverse direction must not happen.
 Atom and string keys are both accepted.
 
 An **unbound placeholder is left verbatim**, not blanked, and never raises. Both
@@ -110,6 +119,41 @@ are wrong, but a visible `{{user_emial}}` announces the typo in a preview or a
 test, while a silent empty string reads as finished copy and ships — and a
 message with one flawed line still beats a message that never arrives. Callers
 that want it to be an error ask `missing_variables/4` up front.
+
+### HTML escaping, and the `{{{raw}}}` opt-out
+
+`html` HTML-escapes a bound `{{variable}}` value (`&` `<` `>` `"` `'`) —
+`subject` and `text` never do, being plain text. A value is always treated as
+data, not as markup to preserve, so a value that already contains `&amp;` is
+escaped again.
+
+`{{{variable}}}` (triple braces) substitutes **raw**, in every part, regardless
+of escaping — the opt-out for a variable that already holds rendered HTML, such
+as a pre-built line-items table:
+
+```elixir
+PhoenixKit.Templates.render(
+  "billing_invoice",
+  %{html: "<table>{{{line_items_html}}}</table>"},
+  %{"line_items_html" => render_line_items(invoice)}
+)
+```
+
+In `subject` and `text`, `{{{variable}}}` and `{{variable}}` are identical —
+both are raw — so the same template content is valid pasted into any of the
+three parts.
+
+> #### Escaping `html` is a breaking change from 0.1.x {: .warning}
+>
+> Before 0.2.0, `html` substituted every `{{variable}}` raw, exactly like
+> `subject` and `text` still do. If a host override's `html` part relies on a
+> variable carrying markup on purpose, switch that placeholder to
+> `{{{variable}}}` when upgrading. See the CHANGELOG for the full upgrade
+> note.
+
+See `PhoenixKit.Templates.Substitution` for the parsing rules and a table of
+boundary cases (adjacent braces, stray single braces, CSS inside `html`, and
+so on).
 
 ## No runtime dependencies
 
