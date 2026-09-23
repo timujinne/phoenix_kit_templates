@@ -3,7 +3,16 @@ defmodule PhoenixKit.Templates.Substitution do
   `{{variable}}` substitution, with an `{{{variable}}}` opt-out from escaping.
 
   The double-brace syntax matches what the database-backed email templates
-  used, so content exported from those rows carries over unchanged.
+  used, so content exported from those rows carries over unchanged — as long
+  as it contains no triple brace. `{{{variable}}}` is new in 0.2.0 and is not
+  understood by those templates' own substitution: `phoenix_kit_emails` and
+  `phoenix_kit_newsletters` each run their own, older `{{var}}`-only regex
+  against database rows, which does not have a triple-brace rule and treats
+  the outer pair as literal text around a substituted inner pair instead (see
+  the boundary-case table below for exactly what that renders as). A database
+  row must therefore not be written with triple braces — the opt-out is only
+  meaningful once content is read by *this* package at 0.2.0 or later, for
+  example a host's file override, or content exported into one.
   Surrounding whitespace is allowed: `{{user_email}}` and `{{ user_email }}`
   are the same placeholder.
 
@@ -42,16 +51,26 @@ defmodule PhoenixKit.Templates.Substitution do
   placeholder must still send — so callers that want it to be an error ask
   `missing/2` up front.
 
-  ## Parsing: one left-to-right pass, triple tried before double
+  ## Parsing: one left-to-right pass, not "try one form, then the other"
 
-  Both forms are matched by a single regular expression whose alternation
-  tries the three-brace form first at every position. Regex alternation in
-  Elixir (backed by PCRE) is leftmost-first, not leftmost-longest, which is
-  exactly the ordering this needs: a naive *second* pass for `{{{raw}}}` after
-  a first pass for `{{var}}` does not work, because the first pass matches the
-  *inner* pair of a triple-brace placeholder and leaves a stray `{value}`
-  behind. One ordered pass never sees that inner pair as a candidate on its
-  own.
+  Both forms are matched by a single regular expression, scanned once, left
+  to right. Correctness does not come from which alternative — triple-brace
+  or double-brace — is written first in the pattern: at any position right
+  after two `{`, the next character deterministically settles which one, if
+  either, can go on to match there. A third `{` can only continue a
+  triple-brace attempt; whitespace or a name's first character can only
+  continue a double-brace one. The two are mutually exclusive at every
+  position, so swapping their order in the pattern changes nothing — checked
+  directly against every case in the table below, not just argued.
+
+  What *does* matter is running one combined pass instead of two separate
+  ones. A first pass that only recognizes `{{var}}`, run before a second pass
+  for `{{{raw}}}`, would match the *inner* pair of a triple-brace placeholder
+  and leave a stray `{value}` behind — the failure the plan review flagged in
+  advance. A single left-to-right scan never gets the chance to make that
+  mistake: for each position it asks whether either full form completes right
+  there, instead of finding `{{...}}` first and only then looking outward for
+  a third brace.
 
   Braces that do not complete a full double- or triple-brace placeholder are
   left as literal text — this is what keeps single `{`/`}` in legacy content,
@@ -67,9 +86,9 @@ defmodule PhoenixKit.Templates.Substitution do
   | `{{{x}}}` | `V`, raw | plain triple-brace |
   | `{{{ x }}}` | `V`, raw | inner whitespace ignored, as with double braces |
   | `{{ x }}` | `V` (escaped if `escape: true`) | plain double-brace |
-  | `{{{{x}}}}` | `{V}` | the two *outer* braces on each side are literal; the *inner* six form one triple-brace placeholder |
-  | `{{{x}}` | `{V}` (escaped if `escape: true`) | only two closing braces exist, so the triple alternative can't complete; the engine retries as *double*-brace starting one character in, leaving the first `{` as a literal, matching `{{x}}` as an escapable placeholder |
-  | `{{x}}}` | `V}` (escaped if `escape: true`) | mirror of the above: `{{x}}` matches as double-brace, the extra trailing `}` is literal |
+  | `{{{{x}}}}` | `{V}` | one literal `{` before it and one literal `}` after it; the middle seven characters, `{{{x}}}`, are the triple-brace placeholder |
+  | `{{{x}}` | `{V}` (escaped if `escape: true`) | only two closing braces exist, so the triple form has nothing to complete there; the double form does, starting one character in, leaving the first `{` as literal |
+  | `{{x}}}` | `V}` (escaped if `escape: true`) | mirror of the row above: the double form completes as `{{x}}`; the extra trailing `}` is literal |
   | `{ {{x}} }` | `{ V }` | single outer braces are never part of any placeholder — a placeholder always starts with two consecutive `{` |
 
   An unbound `x` in any of the rows above reproduces the input byte-for-byte:
@@ -139,6 +158,10 @@ defmodule PhoenixKit.Templates.Substitution do
       `{{{name}}}` is never escaped, regardless of this option — it is the
       opt-out for a variable that already holds rendered HTML.
 
+  Any other key, or a non-boolean `:escape`, raises `ArgumentError` — a caller
+  building this keyword list by hand gets a clear failure instead of a typo
+  (`escaped: true`) silently behaving like `escape: false`.
+
   ```
   iex> PhoenixKit.Templates.Substitution.substitute(
   ...>   "<p>{{name}}</p>",
@@ -156,13 +179,28 @@ defmodule PhoenixKit.Templates.Substitution do
   ```
   """
   @spec substitute(String.t() | nil, variables(), keyword()) :: String.t() | nil
-  def substitute(nil, _variables, _opts), do: nil
+  def substitute(nil, _variables, opts) do
+    validate_opts!(opts)
+    nil
+  end
 
   def substitute(content, variables, opts) when is_binary(content) do
-    escape? = Keyword.get(opts, :escape, false)
+    escape? = validate_opts!(opts)
     bound = normalize(variables)
 
     Regex.replace(@placeholder, content, &replace_match(&1, &2, &3, bound, escape?))
+  end
+
+  defp validate_opts!(opts) do
+    opts = Keyword.validate!(opts, escape: false)
+
+    case Keyword.fetch!(opts, :escape) do
+      escape? when is_boolean(escape?) ->
+        escape?
+
+      other ->
+        raise ArgumentError, "expected :escape to be a boolean, got: #{inspect(other)}"
+    end
   end
 
   defp replace_match(whole, raw, escapable, bound, escape?) do

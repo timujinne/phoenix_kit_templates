@@ -70,12 +70,13 @@ change for any exported override. No core template ships an `html` part today,
 so exposure was limited to host-written overrides.
 
 Fixed in `PhoenixKit.Templates.Substitution` (PR:
-BeamLabEU/phoenix_kit_templates#1): `html` now HTML-escapes a bound
-`{{variable}}` value; `{{{variable}}}` (triple braces) is the opt-out,
-substituting raw in every part. `subject` and `text` are unaffected — never
-escaped, and `{{{variable}}}` there is identical to `{{variable}}`. See the
-README's "Placeholders" section and the `Substitution` moduledoc for the
-parsing rules and boundary-case table.
+https://github.com/BeamLabEU/phoenix_kit_templates/pull/1): `html` now
+HTML-escapes a bound `{{variable}}` value; `{{{variable}}}` (triple braces) is
+the opt-out, substituting raw in every part. `subject` and `text` are not
+escaped, exactly as before — but triple-brace parsing itself is new in every
+part, so `{{{x}}}`-shaped content there can render differently than in 0.1.x
+too, independent of escaping. See the README's "Placeholders" section and the
+`Substitution` moduledoc for the parsing rules and boundary-case table.
 
 ### NOT FIXED — non-`String.Chars` values raise
 

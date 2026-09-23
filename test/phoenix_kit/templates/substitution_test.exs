@@ -11,7 +11,16 @@ defmodule PhoenixKit.Templates.SubstitutionTest do
     end
 
     test "ignores text that only looks like a placeholder" do
-      for content <- ["{{ }}", "{{1abc}}", "{{a-b}}", "{single}", "{{unclosed"] do
+      for content <- [
+            "{{ }}",
+            "{{1abc}}",
+            "{{a-b}}",
+            "{single}",
+            "{{unclosed",
+            "{{}}",
+            "{{{}}}",
+            "{{{ }}}"
+          ] do
         assert Substitution.variables(content) == [], "expected no match in #{inspect(content)}"
       end
     end
@@ -99,7 +108,10 @@ defmodule PhoenixKit.Templates.SubstitutionTest do
       {"{{{{x}}}}", "V", "{V}"},
       {"{{{x}}", "<b>", "{&lt;b&gt;"},
       {"{{x}}}", "<b>", "&lt;b&gt;}"},
-      {"{ {{x}} }", "<b>", "{ &lt;b&gt; }"}
+      {"{ {{x}} }", "<b>", "{ &lt;b&gt; }"},
+      {"{{{x}}}}", "<b>Ada</b>", "<b>Ada</b>}"},
+      {"{{{{x}}}", "<b>Ada</b>", "{<b>Ada</b>"},
+      {"{{{{{x}}}}}", "<b>Ada</b>", "{{<b>Ada</b>}}"}
     ]
 
     for {input, value, expected} <- boundary_cases do
@@ -125,6 +137,32 @@ defmodule PhoenixKit.Templates.SubstitutionTest do
     test "adjacent placeholders without a separating space both resolve" do
       assert Substitution.substitute("{{a}}{{{b}}}", %{a: "<x>", b: "<y>"}, escape: true) ==
                "&lt;x&gt;<y>"
+    end
+
+    test "an empty or whitespace-only name never matches, in either syntax" do
+      for content <- ["{{}}", "{{ }}", "{{{}}}", "{{{ }}}"] do
+        assert Substitution.substitute(content, %{}, escape: true) == content,
+               "expected #{inspect(content)} to pass through unchanged"
+      end
+    end
+  end
+
+  describe "substitute/3 option validation" do
+    test "raises on an unknown option — a typo must not silently behave like escape: false" do
+      assert_raise ArgumentError, fn ->
+        Substitution.substitute("{{a}}", %{a: 1}, escaped: true)
+      end
+    end
+
+    test "raises when :escape is not a boolean" do
+      assert_raise ArgumentError, fn ->
+        Substitution.substitute("{{a}}", %{a: 1}, escape: "yes")
+      end
+    end
+
+    test "validates options even when content is nil" do
+      assert_raise ArgumentError, fn -> Substitution.substitute(nil, %{}, escaped: true) end
+      assert_raise ArgumentError, fn -> Substitution.substitute(nil, %{}, escape: "yes") end
     end
   end
 

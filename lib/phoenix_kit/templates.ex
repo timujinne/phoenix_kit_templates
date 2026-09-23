@@ -83,6 +83,11 @@ defmodule PhoenixKit.Templates do
   push uses subject-as-title plus text, Telegram and SMS use text alone, the
   in-app inbox uses text. `html` is genuinely optional — core's own auth emails
   ship text-only, so a template with no `html` is the normal case.
+
+  `html` HTML-escapes a bound `{{variable}}` value; `subject` and `text`,
+  being plain text, never do. `{{{variable}}}` (triple braces) is the
+  escaping opt-out, substituting raw in every part — see `render/4` and
+  `PhoenixKit.Templates.Substitution` for the full syntax.
   """
 
   alias PhoenixKit.Templates.Overrides
