@@ -70,7 +70,7 @@ change for any exported override. No core template ships an `html` part today,
 so exposure was limited to host-written overrides.
 
 Fixed in `PhoenixKit.Templates.Substitution` (PR:
-BeamLabEU/phoenix_kit_templates#TODO): `html` now HTML-escapes a bound
+BeamLabEU/phoenix_kit_templates#1): `html` now HTML-escapes a bound
 `{{variable}}` value; `{{{variable}}}` (triple braces) is the opt-out,
 substituting raw in every part. `subject` and `text` are unaffected — never
 escaped, and `{{{variable}}}` there is identical to `{{variable}}`. See the
