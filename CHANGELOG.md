@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.2.0 - 2026-09-23
+
+### Breaking
+
+- **`html` now HTML-escapes a bound `{{variable}}` value** (`&` `<` `>` `"`
+  `'`, the set `Phoenix.HTML` escapes). A value carrying markup — a user or
+  company name — no longer becomes live HTML in an email. `subject` and `text`
+  are plain text and are still never escaped.
+
+  **Upgrading:** a host override whose `html` part relies on a variable carrying
+  markup on purpose (billing's `line_items_html`, a wrapped `content`) must
+  switch that placeholder from `{{variable}}` to `{{{variable}}}`. A value that
+  was being pre-escaped by the caller to compensate is now escaped twice — stop
+  escaping it, or opt it out with triple braces.
+- **`{{{variable}}}` is now parsed in every part.** In 0.1.x `{{{x}}}` rendered as
+  `{V}` (literal outer braces around a substituted `{{x}}`); it now renders `V`.
+  This applies to `subject` and `text` too, independent of escaping. Database
+  templates in `phoenix_kit_emails` / `phoenix_kit_newsletters` still use their
+  own `{{var}}`-only substitution, so a database row must not be written with
+  triple braces.
+
+### Added
+
+- `{{{variable}}}` (triple braces) substitutes raw in every part — the opt-out
+  for a variable that already holds rendered HTML.
+  ([#1](https://github.com/BeamLabEU/phoenix_kit_templates/pull/1))
+- `Substitution.substitute/3` with an `:escape` option. Unknown options and a
+  non-boolean `:escape` raise `ArgumentError`, so a typo like `escaped: true`
+  cannot silently render unescaped.
+- `Substitution.variables/1`, `missing/2` and `Templates.missing_variables/4`
+  report triple-brace placeholders like double-brace ones.
+
+### Changed
+
+- HTML escaping is a single pass over the value.
+
 ## 0.1.2 - 2026-09-16
 
 ### Fixed

@@ -238,16 +238,15 @@ defmodule PhoenixKit.Templates.Substitution do
 
   # No `phoenix_html` dependency, deliberately (see the moduledoc): this
   # package is a hard dependency of `phoenix_kit` core, so nothing here may
-  # pull anything in. `&` first, so the entities this introduces are not
-  # themselves re-escaped by the later replacements.
-  defp escape_html(value) do
-    value
-    |> String.replace("&", "&amp;")
-    |> String.replace("<", "&lt;")
-    |> String.replace(">", "&gt;")
-    |> String.replace("\"", "&quot;")
-    |> String.replace("'", "&#39;")
-  end
+  # pull anything in. One pass over the value, so an entity this introduces is
+  # never itself re-escaped, whatever order the characters are listed in.
+  defp escape_html(value), do: String.replace(value, ["&", "<", ">", "\"", "'"], &entity/1)
+
+  defp entity("&"), do: "&amp;"
+  defp entity("<"), do: "&lt;"
+  defp entity(">"), do: "&gt;"
+  defp entity("\""), do: "&quot;"
+  defp entity("'"), do: "&#39;"
 
   # Atom and string keys are both accepted so a caller can write %{user_email: …}
   # while content exported from the old templates keeps its "user_email" keys.

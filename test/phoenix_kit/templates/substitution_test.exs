@@ -80,6 +80,11 @@ defmodule PhoenixKit.Templates.SubstitutionTest do
                "&amp;&lt;&gt;&quot;&#39;"
     end
 
+    test "escapes every occurrence, leaving multibyte text between them intact" do
+      assert Substitution.substitute("{{v}}", %{v: "Zoë & Ω <'a'> & ё"}, escape: true) ==
+               "Zoë &amp; Ω &lt;&#39;a&#39;&gt; &amp; ё"
+    end
+
     test "escapes already-escaped-looking content again, because a value is always data" do
       assert Substitution.substitute("{{v}}", %{v: "&amp;"}, escape: true) == "&amp;amp;"
     end
