@@ -71,6 +71,52 @@ defmodule PhoenixKit.TemplatesTest do
     end
   end
 
+  describe "render/4 escapes html but not subject or text" do
+    test "a {{variable}} value is HTML-escaped in html only" do
+      defaults = %{
+        subject: "{{company}}",
+        text: "{{company}}",
+        html: "<p>{{company}}</p>"
+      }
+
+      rendered = Templates.render("billing_invoice", defaults, %{"company" => "A & B <ok>"})
+
+      assert rendered.subject == "A & B <ok>"
+      assert rendered.text == "A & B <ok>"
+      assert rendered.html == "<p>A &amp; B &lt;ok&gt;</p>"
+    end
+
+    test "{{{variable}}} opts an html value out of escaping — the pre-rendered-HTML case" do
+      defaults = %{html: "<table>{{{line_items_html}}}</table>"}
+      pre_rendered = "<tr><td>Widget</td></tr>"
+
+      assert Templates.render("billing_invoice", defaults, %{"line_items_html" => pre_rendered}).html ==
+               "<table><tr><td>Widget</td></tr></table>"
+    end
+
+    test "{{{variable}}} in subject or text behaves exactly like {{variable}} — both are raw" do
+      defaults = %{subject: "{{{name}}}", text: "{{{name}}}"}
+      rendered = Templates.render("billing_invoice", defaults, %{"name" => "<b>Ada</b>"})
+
+      assert rendered.subject == "<b>Ada</b>"
+      assert rendered.text == "<b>Ada</b>"
+    end
+
+    test "a host override's html is escaped exactly like a caller default's", %{tmp_dir: root} do
+      write(root, "billing_invoice", "html.html", "<p>{{company}}</p><p>{{{footer_html}}}</p>")
+
+      rendered =
+        Templates.render(
+          "billing_invoice",
+          %{},
+          %{"company" => "<script>", "footer_html" => "<em>ok</em>"},
+          paths: [root]
+        )
+
+      assert rendered.html == "<p>&lt;script&gt;</p><p><em>ok</em></p>"
+    end
+  end
+
   describe "missing_variables/4" do
     test "reports unbound placeholders per part, omitting clean ones" do
       assert Templates.missing_variables("new_login_alert", defaults(), %{
@@ -92,6 +138,15 @@ defmodule PhoenixKit.TemplatesTest do
 
       assert Templates.missing_variables("new_login_alert", defaults(), %{}, paths: [root]) ==
                %{text: ["nickname"]}
+    end
+
+    test "a {{{raw}}} placeholder is reported like a {{escaped}} one" do
+      assert Templates.missing_variables(
+               "billing_invoice",
+               %{html: "<p>{{{line_items_html}}}</p>"},
+               %{}
+             ) ==
+               %{html: ["line_items_html"]}
     end
   end
 end

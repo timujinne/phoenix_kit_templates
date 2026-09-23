@@ -111,6 +111,40 @@ test, while a silent empty string reads as finished copy and ships — and a
 message with one flawed line still beats a message that never arrives. Callers
 that want it to be an error ask `missing_variables/4` up front.
 
+### HTML escaping, and the `{{{raw}}}` opt-out
+
+`html` HTML-escapes a bound `{{variable}}` value (`&` `<` `>` `"` `'`) —
+`subject` and `text` never do, being plain text. A value is always treated as
+data, not as markup to preserve, so a value that already contains `&amp;` is
+escaped again.
+
+`{{{variable}}}` (triple braces) substitutes **raw**, in every part, regardless
+of escaping — the opt-out for a variable that already holds rendered HTML, such
+as a pre-built line-items table:
+
+```elixir
+PhoenixKit.Templates.render(
+  "billing_invoice",
+  %{html: "<table>{{{line_items_html}}}</table>"},
+  %{"line_items_html" => render_line_items(invoice)}
+)
+```
+
+In `subject` and `text`, `{{{variable}}}` and `{{variable}}` are identical —
+both are raw — so the same template content is valid pasted into any of the
+three parts.
+
+> [!WARNING]
+> Escaping `html` is a **breaking change from 0.1.x**: before 0.2.0, `html`
+> substituted every `{{variable}}` raw, exactly like `subject` and `text`
+> still do. If a host override's `html` part relies on a variable carrying
+> markup on purpose, switch that placeholder to `{{{variable}}}` when
+> upgrading. See the CHANGELOG for the full upgrade note.
+
+See `PhoenixKit.Templates.Substitution` for the parsing rules and a table of
+boundary cases (adjacent braces, stray single braces, CSS inside `html`, and
+so on).
+
 ## No runtime dependencies
 
 Deliberate: `phoenix_kit` depends on this package, so anything pulled in here

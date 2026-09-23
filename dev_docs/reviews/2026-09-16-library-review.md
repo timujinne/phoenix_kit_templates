@@ -56,18 +56,26 @@ Both functions carried their own copy of "override, else default". Extracted to
 one private `resolve/4`, so the check can never inspect different content from
 what the render sends.
 
-### NOT FIXED — HTML part substitutes variables unescaped
+### FIXED (0.2.0) — HTML part substitutes variables unescaped
 
-`{{variable}}` values go into `html` verbatim. A value carrying markup — a user
-name, a company name — becomes live HTML in the email. This matches the
+`{{variable}}` values went into `html` verbatim. A value carrying markup — a
+user name, a company name — became live HTML in the email. This matched the
 database templates it replaces (`Template.substitute_string/2` does a plain
-`String.replace`), so it is not a regression, but it is the wrong default.
+`String.replace`), so it was not a regression, but it was the wrong default.
 
 Deliberately deferred to 0.2.0 rather than slipped into a patch: billing passes
-a pre-rendered `line_items_html` variable that must stay raw, so escaping needs
-an opt-out (e.g. `{{{raw}}}`) at the same time, and changing substitution
-semantics is a breaking change for any exported override. No core template
-ships an `html` part today, so exposure is limited to host-written overrides.
+a pre-rendered `line_items_html` variable that must stay raw, so escaping needed
+an opt-out at the same time, and changing substitution semantics is a breaking
+change for any exported override. No core template ships an `html` part today,
+so exposure was limited to host-written overrides.
+
+Fixed in `PhoenixKit.Templates.Substitution` (PR:
+BeamLabEU/phoenix_kit_templates#TODO): `html` now HTML-escapes a bound
+`{{variable}}` value; `{{{variable}}}` (triple braces) is the opt-out,
+substituting raw in every part. `subject` and `text` are unaffected — never
+escaped, and `{{{variable}}}` there is identical to `{{variable}}`. See the
+README's "Placeholders" section and the `Substitution` moduledoc for the
+parsing rules and boundary-case table.
 
 ### NOT FIXED — non-`String.Chars` values raise
 

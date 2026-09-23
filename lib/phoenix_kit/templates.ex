@@ -106,11 +106,32 @@ defmodule PhoenixKit.Templates do
 
   Unbound `{{placeholders}}` survive into the output rather than blanking or
   raising; see `PhoenixKit.Templates.Substitution`.
+
+  ## Escaping
+
+  The `html` part HTML-escapes a bound `{{variable}}` value (`&` `<` `>` `"`
+  `'`); `subject` and `text` never do, being plain text. In every part,
+  `{{{variable}}}` (triple braces) substitutes raw — the opt-out for a
+  variable that already holds rendered HTML, such as a pre-built line-items
+  table. See `PhoenixKit.Templates.Substitution` for the full syntax and its
+  boundary cases.
+
+  > #### Escaping `html` is a breaking change from 0.1.x {: .warning}
+  >
+  > Before 0.2.0, `html` substituted every `{{variable}}` raw, like `subject`
+  > and `text` still do. A host override whose `html` part relies on a
+  > variable carrying markup on purpose must switch that placeholder to
+  > `{{{variable}}}` when upgrading — see the CHANGELOG.
   """
   @spec render(String.t(), defaults(), Substitution.variables(), keyword()) :: rendered()
   def render(name, defaults, variables \\ %{}, opts \\ []) when is_binary(name) do
     Map.new(Overrides.parts(), fn part ->
-      {part, name |> resolve(part, defaults, opts) |> Substitution.substitute(variables)}
+      content =
+        name
+        |> resolve(part, defaults, opts)
+        |> Substitution.substitute(variables, escape: part == :html)
+
+      {part, content}
     end)
   end
 
