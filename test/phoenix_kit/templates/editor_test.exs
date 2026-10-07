@@ -1134,7 +1134,8 @@ defmodule PhoenixKit.Templates.EditorTest do
       refute has_element?(view, "#editor-parts button[name=action][value=md_to_html]")
     end
 
-    test "Save is the form's first submit button, so a submit naming none saves", %{tmp_dir: root} do
+    test "Save is the form's first submit button, and a submit naming none saves",
+         %{tmp_dir: root} do
       seed(root)
       view = mount_editor(root, %{convert: @convert})
       select(view, "order_offer")
@@ -1156,6 +1157,10 @@ defmodule PhoenixKit.Templates.EditorTest do
       |> render_submit()
 
       assert File.read!(Path.join([root, "order_offer", "subject.et.txt"])) == "Uus"
+
+      view |> form("#editor-parts", parts: %{subject: "Uuem"}) |> render_submit()
+
+      assert File.read!(Path.join([root, "order_offer", "subject.et.txt"])) == "Uuem"
     end
 
     test "a submit with an unknown action neither saves nor converts", %{tmp_dir: root} do
@@ -1184,7 +1189,7 @@ defmodule PhoenixKit.Templates.EditorTest do
           html: "<p>Ignored</p>"
         })
 
-      assert html =~ "not saved yet"
+      assert html =~ "Filled Text from Markdown"
       assert field(view, :text) == "Tere {{order_number}}"
       assert field(view, :subject) == "Unsaved subject"
       assert field(view, :markdown) == "**Tere** {{order_number}}"
