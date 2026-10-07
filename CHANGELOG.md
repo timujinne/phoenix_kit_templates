@@ -40,6 +40,18 @@
   part wins with no check for one. Compiled only when
   `phoenix_live_view` is present; it is an optional dependency, and nothing
   depends on PhoenixKit.
+- **Editor: a text version in the preview, and converters.** A `preview` may
+  return `{subject, html, text}`; the preview then has *HTML* and *Text* tabs
+  (`{subject, html}` works as before). An optional `convert` attribute,
+  `%{to_text: callback, markdown_to_html: callback}`, adds *Fill text from
+  content* (Markdown if not blank, else HTML, into Text) and *Markdown → HTML*
+  (into HTML). They fill the form, not the files: the user's other unsaved
+  fields are kept, and Save writes the converted part like an edited one.
+  Converters are called with the form's text as typed, placeholders included,
+  and fail like the other callbacks, leaving the form as it was. The buttons
+  submit the form with an `action` (LiveView 1.0 or later); Save is the
+  first, so a submit with no button named saves. No buttons read-only or
+  without `convert`.
 
 ### Fixed
 
