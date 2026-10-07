@@ -183,6 +183,7 @@ if Code.ensure_loaded?(Phoenix.LiveComponent) do
          contents: %{},
          baseline: %{},
          form_values: %{},
+         form_rev: 0,
          confirm_delete?: false,
          preview_result: nil,
          preview_tab: :html,
@@ -401,9 +402,17 @@ if Code.ensure_loaded?(Phoenix.LiveComponent) do
 
     defp conversion_result(_other), do: {:error, "unexpected result"}
 
+    # `form_rev` changes on every conversion, so the reply touches every field
+    # and the browser redraws them from what it was sent. Without it, a
+    # conversion coming out as the server already had the form (the user
+    # retyped only its target since the last one) sends nothing, and the
+    # browser keeps the retyped text.
     defp converted({:ok, value}, socket, values, target, format) do
       socket
-      |> assign(form_values: Map.put(values, target, normalize_newlines(value)))
+      |> assign(
+        form_values: Map.put(values, target, normalize_newlines(value)),
+        form_rev: socket.assigns.form_rev + 1
+      )
       |> notice(
         :info,
         "Filled #{part_title(target)} from #{part_title(format)}. " <>
@@ -1030,6 +1039,7 @@ if Code.ensure_loaded?(Phoenix.LiveComponent) do
                 part={part}
                 file={@contents[part]}
                 value={@form_values[part]}
+                rev={@form_rev}
               />
               <p class="text-xs opacity-70">
                 Each language is saved on its own: switching tabs or templates drops unsaved
@@ -1145,6 +1155,7 @@ if Code.ensure_loaded?(Phoenix.LiveComponent) do
     attr :part, :atom, required: true
     attr :file, :map, default: nil
     attr :value, :string, default: nil
+    attr :rev, :integer, default: 0
 
     defp part_field(%{file: %{invalid: true}} = assigns) do
       ~H"""
@@ -1177,6 +1188,7 @@ if Code.ensure_loaded?(Phoenix.LiveComponent) do
           id={@id}
           name={"parts[#{@part}]"}
           rows={@rows}
+          data-form-rev={@rev}
           class="textarea w-full font-mono text-sm"
         >{Phoenix.HTML.Form.normalize_value("textarea", @value)}</textarea>
       </div>
