@@ -106,8 +106,9 @@ if Code.ensure_loaded?(Phoenix.LiveComponent) do
         line — and a template left with no files loses its directory, staying
         open as an unsaved one. Line breaks are stored as `\\n`. A save that
         is partly refused (one part too large, say) names the parts it saved
-        and the ones it did not. Each tab is saved on its own: switching tabs
-        or templates, or a reconnect, drops unsaved changes.
+        and the ones it did not, which stay in the form as the user left
+        them. Each tab is saved on its own: switching tabs or templates, or
+        a reconnect, drops unsaved changes.
       * A part is written only when the user changed it from what the form
         was given (on opening the template or tab, or after a save): a part
         left alone is never written back over another session's change made
@@ -327,7 +328,19 @@ if Code.ensure_loaded?(Phoenix.LiveComponent) do
       |> load_templates()
       |> redraft()
       |> load_contents()
+      |> assign(form_values: refused_values(errors, params))
       |> preview()
+    end
+
+    # A refused part stays in the form as the user sent it: drawn from the
+    # file again, a part a conversion filled would be lost. Text that is not
+    # UTF-8 cannot be drawn at all.
+    defp refused_values(errors, params) do
+      for {part, _reason} <- errors,
+          value = params[Atom.to_string(part)],
+          is_binary(value) and String.valid?(value),
+          into: %{},
+          do: {part, normalize_newlines(value)}
     end
 
     # Puts a converted part into the form, not on disk: `form_values` keeps
@@ -607,7 +620,7 @@ if Code.ensure_loaded?(Phoenix.LiveComponent) do
     # re-render refreshes `contents` from disk but keeps it, so `save/2` can
     # tell a part the user left alone from one they edited. `form_values`,
     # the fields as a conversion left them, go too: the form is drawn from the
-    # files again.
+    # files again (but for the parts a save refused: `save/2`).
     defp load_contents(socket) do
       socket = refresh_contents(socket)
       assign(socket, baseline: baseline(socket.assigns.contents), form_values: %{})
